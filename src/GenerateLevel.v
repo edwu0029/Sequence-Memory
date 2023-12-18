@@ -1,171 +1,191 @@
-//Generates a level based on the 
+//Generate level with moves stored in bram
+// GeneralLevel G(
+//     .clock(),
+//     .reset(),
+//     .start(),
+//     .level(),
+
+//     .done(),
+//     .addressS(),
+//     .dataS(),
+//     .wrenS()
+// );
 module GenerateLevel(
     input clock,
-    input [4:0] levelNum,
-    input start,
     input reset,
+    input start,
+    input [2:0] level, //level 0, 1, 2, .. 7
 
-    output done,
-    output wire [4:0] address,
-    output wire [15:0] dataIn,
-    output wire wren
+    output wire done,
+    output wire [4:0] addressS,
+    output wire [3:0] dataS,
+    output wire wrenS
 );
-    wire [4:0] totalMoves;
-    assign totalMoves = (levelNum/5'd2); //move 0, 1, 2, ... levelNum/2
+    wire [2:0] totalMoves;
+    assign totalMoves = level; //Moves are 0, 1, 2, ... level
+    
+    wire [2:0] moveNum;
 
-    wire regen;
-    wire [4:0] moves;
+    wire [3:0] moveOneHot;
 
     wire gen, load, moveIncr;
-    wire [5:0] currentState, nextState;
 
+    GenerateControl C(
+        .clock(clock),
+        .reset(reset),
+        .start(start),
 
-    GenerateLevelControl GLC(clock, reset, start, totalMoves,
-    regen, moves,
-    gen, load, moveIncr, done
+        .totalMoves(totalMoves),
+        .moveNum(moveNum),
+
+        .gen(gen),
+        .load(load),
+        .moveIncr(moveIncr),
+        .done(done)
     );
-    
-    wire [15:0] temp;
-    wire [15:0]oneHotCode;
 
-    GenerateLevelDatapath DP(clock, reset,
-    gen, load, moveIncr,
-    moves, regen, temp, oneHotCode, address, dataIn, wren);
+    GenerateDatapath D(
+        .clock(clock),
+        .start(start),
+        
+        .gen(gen),
+        .load(load),
+        .moveIncr(moveIncr),
+        
+        .moveNum(moveNum),
+        .moveOneHot(moveOneHot),
+
+        .addressS(addressS),
+        .dataS(dataS),
+        .wrenS(wrenS)
+    );
 endmodule
 
-module GenerateLevelControl(
+module GenerateControl(
     input clock,
     input reset,
     input start,
-    input [4:0] totalMoves,
 
-    input regen, 
-    input [4:0] moves,
+    input [2:0] totalMoves,
+    input [2:0] moveNum,
 
     output reg gen,
     output reg load,
     output reg moveIncr,
     output reg done
 );
+    
 
-    reg [5:0] currentState, nextState;
+    /*===================== FSM ======================== */
+    reg [2:0] currentState, nextState;
 
-    localparam  S_IDLE         = 5'd0,
-                S_GEN          = 5'd1,
-                S_LOAD         = 5'd2,
-                S_NEXT_MOVE    = 5'd3,
-                S_FINISH       = 5'd4;
+    localparam  S_IDLE      = 3'd1,
+                S_GEN       = 3'd2,
+                S_LOAD      = 3'd3,
+                S_NEXT_MOVE = 3'd4,
+                S_DONE      = 3'd5;
 
-    // Next State Logic
+    // Next state logic aka our state table
     always@(*)
-    begin
+    begin: state_table
             case (currentState)
-                S_IDLE:
-                begin
-                    if(start)
-                        nextState = S_GEN;
-                    else
-                        nextState = S_IDLE;
-                end
-                S_GEN:
-                begin
-                    if(regen==1'b0) // No need to regenerate
-                        nextState = S_LOAD;
-                    else
-                        nextState = S_GEN;
-                end
+                S_IDLE: nextState = start ? S_GEN : S_IDLE;
+                S_GEN: nextState = S_LOAD;
                 S_LOAD: nextState = S_NEXT_MOVE;
-                S_NEXT_MOVE:
-                begin
-                    if(moves<totalMoves)
+                S_NEXT_MOVE: begin
+                    if(moveNum < totalMoves)
                         nextState = S_GEN;
                     else
-                        nextState = S_FINISH;
+                        nextState = S_DONE;
                 end
-                S_FINISH: nextState = S_IDLE;
-            default:     nextState = S_IDLE;
+                S_DONE: nextState = S_IDLE;
+            default: nextState = S_IDLE;
         endcase
-    end // state_table
+    end
 
 
     // Output logic aka all of our datapath control signals
     always @(*)
     begin
+        // By default make all our signals 0
         gen <= 1'b0;
         load <= 1'b0;
         moveIncr <= 1'b0;
         done <= 1'b0;
         case (currentState)
-            S_GEN:
+            S_IDLE: begin
+            end
+            S_GEN: begin
                 gen <= 1'b1;
-            S_LOAD:
+            end
+            S_LOAD: begin
                 load <= 1'b1;
-            S_NEXT_MOVE:
+            end
+            S_NEXT_MOVE: begin
                 moveIncr <= 1'b1;
-            S_FINISH:
+            end
+            S_DONE: begin
                 done <= 1'b1;
+            end
         endcase
     end
 
-    // Current state register
+    // currentState registers
     always@(posedge clock)
     begin
-      if(reset==1'b1)
-      begin
-         currentState <= S_IDLE;
-      end
-      else
-         currentState <= nextState;
+        if(reset == 1'b1)
+            currentState <= S_IDLE;
+        else
+            currentState <= nextState;
     end
 endmodule
 
-
-module GenerateLevelDatapath(
+module GenerateDatapath(
     input clock,
-    input reset,
-
+    input start,
+    
     input gen,
     input load,
     input moveIncr,
+
+    output reg [2:0] moveNum,
+    output reg [3:0] moveOneHot,
+
+    output reg [4:0] addressS,
+    output reg [3:0] dataS,
+    output reg wrenS
+);
+
+    wire [1:0] genNum;
+    wire [3:0] oneHot;
     
-    output reg [4:0] moves,
-    output reg regen,
-    output wire [15:0] temp,
-    output reg [15:0] oneHotCode,
-
-    //For Storing to BRAM
-    output reg [4:0] loadAddress,
-    output reg [15:0] loadData,
-    output reg loadWREN
+    LFSR PRNG(
+        .clock(clock),
+        .start(start),
+        .reset(rest),
+        
+        .num(genNum)
     );
-
-    wire [3:0] genNum;
-    reg [15:0] prev;
-
-    LFSR #(.SEED(64'd2854292432761329182)) PRNG(clock, reset, gen, genNum);
-    DecToOneHot Conv(genNum, temp);
+    GetOneHot Conv(genNum, oneHot);
 
     always@(posedge clock)
     begin
-        loadWREN <= 1'b0;
-        if(reset)
-        begin
-            regen <= 1'b0;
-            moves <= 5'b0;
+        addressS <= 5'd0;
+        dataS <= 4'd0;
+        wrenS <= 1'b0;
+        if(start==1'b1) begin
+            moveNum <= 3'b0;
         end
-        else if(gen)
-            if(temp==prev) //Need to regenerate
-                regen <= 1'b1;
-            else
-                oneHotCode <= temp;
-        else if(load)
-        begin
-            prev <= oneHotCode;
-            loadAddress <= moves;
-            loadData <= oneHotCode;
-            loadWREN <= 1'b1; //Write
+        if(gen) begin
+            moveOneHot <= oneHot;
         end
-        else if(moveIncr)
-            moves <= moves+1'b1;
+        if(load) begin
+            addressS <= moveNum;
+            dataS <= moveOneHot;
+            wrenS <= 1'b1;
+        end
+        if(moveIncr) begin
+            moveNum <= moveNum + 2'b1;
+        end
     end
 endmodule

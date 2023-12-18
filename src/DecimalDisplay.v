@@ -1,37 +1,21 @@
-// Display 7-bit number(Up to 127) in decimal format on 3 7-seg displays
+// Display 6-bit number(Up to 127) in decimal format on 3 7-seg displays
 module DecimalDisplay(
-    input [6:0] val,
+    input [5:0] val,
 
     output wire [6:0] d0,
-    output wire [6:0] d1,
-    output wire [6:0] d2
+    output wire [6:0] d1
 );
     //d0 is the right most digit in decimal format
-    //d2 is the left most digit in decimal format
-    reg [6:0] temp;
-	reg [3:0] digit0, digit1, digit2;
-    always@(val)
+    //d1 is the left most digit in decimal format
+   reg [5:0] temp;
+	reg [3:0] digit0, digit1;
+    always@(*)
     begin
         temp = val;
-        digit0 = temp%10;
+        digit0 = temp%4'd10;
         temp = temp/4'd10;
-        digit1 = temp%10;
-        temp = temp/4'd10;
-        digit2 = temp%10;
+        digit1 = temp%4'd10;
     end
-
     HexDecoder D0(digit0, d0);
     HexDecoder D1(digit1, d1);
-    HexDecoder D2(digit2, d2);
-endmodule
-module HexDecoder(c, display);
-    input [3:0] c;
-    output [6:0] display;
-    assign display[0] = ((~c[3]&~c[2]&~c[1]&c[0])|(~c[3]&c[2]&~c[1]&~c[0])|(c[3]&~c[2]&c[1]&c[0])|(c[3]&c[2]&~c[1]&c[0]));
-    assign display[1] = ((~c[3]&c[2]&~c[1]&c[0])|(~c[3]&c[2]&c[1]&~c[0])|(c[3]&~c[2]&c[1]&c[0])|(c[3]&c[2]&~c[1]&~c[0])|(c[3]&c[2]&c[1]&~c[0])|(c[3]&c[2]&c[1]&c[0]));
-    assign display[2] = ((~c[3]&~c[2]&c[1]&~c[0])|(c[3]&c[2]&~c[1]&~c[0])|(c[3]&c[2]&c[1]&~c[0])|(c[3]&c[2]&c[1]&c[0]));
-    assign display[3] = ((~c[3]&~c[2]&~c[1]&c[0])|(~c[3]&c[2]&~c[1]&~c[0])|(~c[3]&c[2]&c[1]&c[0])|(c[3]&~c[2]&c[1]&~c[0])|(c[3]&c[2]&c[1]&c[0])  );
-    assign display[4] = ((~c[3]&~c[2]&~c[1]&c[0])|(~c[3]&~c[2]&c[1]&c[0])|(~c[3]&c[2]&~c[1]&~c[0])|(~c[3]&c[2]&~c[1]&c[0])|(~c[3]&c[2]&c[1]&c[0])|(c[3]&~c[2]&~c[1]&c[0]));
-    assign display[5] = ((~c[3]&~c[2]&~c[1]&c[0])|(~c[3]&~c[2]&c[1]&~c[0])|(~c[3]&~c[2]&c[1]&c[0])|(~c[3]&c[2]&c[1]&c[0])|(c[3]&c[2]&~c[1]&c[0])  );
-    assign display[6] = ((~c[3]&~c[2]&~c[1]&~c[0])|(~c[3]&~c[2]&~c[1]&c[0])|(~c[3]&c[2]&c[1]&c[0])|(c[3]&c[2]&~c[1]&~c[0]));
 endmodule
