@@ -1,2 +1,2 @@
 # Sequence-Memory
-Final ECE241 Project
+Pseudorandom Sequence Memory Game on a DE1-SOC FPGA
